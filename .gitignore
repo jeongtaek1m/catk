@@ -1,3 +1,6 @@
 **/__pycache__/
 **/*.pyc
 **/logs
+**/data
+**/ckpt
+logs

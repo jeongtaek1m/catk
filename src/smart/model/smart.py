@@ -210,6 +210,10 @@ class SMART(LightningModule):
                         self.log_epoch if self.log_epoch >= 0 else self.current_epoch
                     )
                     self.logger.log_metrics(epoch_wosac_metrics)
+                    print("\n===== VALIDATION METRICS =====")
+                    for k, v in sorted(epoch_wosac_metrics.items()):
+                        print(f"  {k}: {v}")
+                    print("==============================\n")
 
                 self.wosac_metrics.reset()
                 self.minADE.reset()

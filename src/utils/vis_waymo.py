@@ -297,6 +297,56 @@ class VisWaymo:
             self.video_paths.append(_video_path)
             save_images_to_mp4(images, _video_path)
 
+        # save combined overlay of all rollouts
+        self._save_combined_rollouts(scenario_rollout, n_vis_rollout)
+
+    def _save_combined_rollouts(
+        self,
+        scenario_rollout: sim_agents_submission_pb2.ScenarioRollouts,
+        n_vis_rollout: int,
+    ):
+        """Overlay all rollouts on a single video with distinct colors per rollout."""
+        n_rollout = min(n_vis_rollout, len(scenario_rollout.joint_scenes))
+        # generate distinct colors using HSV colormap
+        rollout_colors = []
+        for i in range(n_rollout):
+            hue = int(180 * i / n_rollout)
+            hsv = np.uint8([[[hue, 255, 220]]])
+            bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)[0, 0]
+            rollout_colors.append(tuple(int(c) for c in bgr))
+
+        images = deepcopy(self.im_gt_blended)
+
+        for step_t in range(self.step_current + 1, self.n_step):
+            overlay = np.zeros_like(images[step_t])
+            for i_rollout in range(n_rollout):
+                ag_valid, ag_xy, ag_yaw, ag_size, ag_role = (
+                    self._get_features_from_trajs(
+                        scenario_rollout.joint_scenes[i_rollout].simulated_trajectories
+                    )
+                )
+                t = step_t - (self.step_current + 1)
+                if t >= ag_valid.shape[1]:
+                    continue
+                _valid = ag_valid[:, t]
+                _pos = ag_xy[:, t]
+                _yaw = ag_yaw[:, t]
+                color = rollout_colors[i_rollout]
+                bbox = self._to_pixel(
+                    self._get_agent_bbox(_valid, _pos, _yaw, ag_size)
+                )
+                for i_ag in range(bbox.shape[0]):
+                    cv2.polylines(
+                        overlay, [bbox[i_ag]], isClosed=True,
+                        color=color, thickness=1, lineType=cv2.LINE_AA,
+                    )
+            alpha = 0.6
+            images[step_t] = cv2.addWeighted(overlay, alpha, images[step_t], 1.0, 0)
+
+        combined_path = (self.save_dir / "all_rollouts_overlay.mp4").as_posix()
+        self.video_paths.append(combined_path)
+        save_images_to_mp4(images, combined_path)
+
     def _get_features_from_trajs(
         self, trajs: List[sim_agents_submission_pb2.SimulatedTrajectory]
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
